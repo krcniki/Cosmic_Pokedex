@@ -1,14 +1,21 @@
 import pyvo as vo
 import pandas as pd
+from pathlib import Path
 
 def extract_nasa_data():
     print("🚀 Initiating connection to NASA Exoplanet Archive API...")
     
-    # 1. Connect to the NASA TAP (Table Access Protocol) Service
+    # 1. GPS Setup: Find the folders from inside scripts/ingestion/
+    ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+    RAW_DIR = ROOT_DIR / "data" / "raw"
+    
+    # Ensure the raw directory exists
+    RAW_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 2. Connect to the NASA TAP Service
     service = vo.dal.TAPService("https://exoplanetarchive.ipac.caltech.edu/TAP")
 
-    # 2. Write the ADQL (Astronomical Data Query Language) query
-    # We filter for planets where essential ML stats are NOT NULL to ensure quality data.
+    # 3. Write the ADQL query
     query = """
         SELECT TOP 200
             pl_name, hostname, sy_snum, sy_pnum, sy_mnum,
@@ -23,26 +30,24 @@ def extract_nasa_data():
     """
 
     print("📡 Executing query... fetching high-quality planetary data...")
-    # 3. Execute the query
     results = service.search(query)
 
-    # 4. Convert the raw astronomical data into a clean Pandas DataFrame
+    # 4. Convert to Pandas DataFrame
     df = results.to_table().to_pandas()
 
-    # Clean up byte strings (NASA API sometimes returns text as b'text')
+    # Clean up byte strings
     for col in df.select_dtypes([object]).columns:
         df[col] = df[col].apply(lambda x: x.decode('utf-8') if isinstance(x, bytes) else x)
 
     print(f"✅ Success! Extracted {len(df)} exoplanets.")
     
-    # 5. Save a local raw copy for caching
-    csv_filename = "raw_exoplanet_data.csv"
-    df.to_csv(csv_filename, index=False)
-    print(f"💾 Raw data cached locally as '{csv_filename}'")
+    # 5. Save to the 'raw' folder
+    output_path = RAW_DIR / "raw_exoplanet_data.csv"
+    df.to_csv(output_path, index=False)
+    print(f"💾 Raw data cached locally at: {output_path}")
     
     return df
 
-# Execute the extraction
 if __name__ == "__main__":
     raw_df = extract_nasa_data()
     print("\nData Preview (First 5 Rows):")
